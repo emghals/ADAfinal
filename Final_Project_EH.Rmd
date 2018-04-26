@@ -1,0 +1,220 @@
+---
+title: "Final_Project"
+author: "Erika Halsey"
+date: "April 26, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r}
+#install.packages('Hmisc')
+library(Hmisc)
+library(plyr)
+library(ggplot2)
+library(foreign)
+library(haven)
+library(readr)
+library(knitr)
+library(haven)
+```
+
+```{r}
+#Import full BRFSS dataset from SPSS file
+
+mydata <- read_sav("/Users/emghals/Downloads/BRFSS2016.sav")
+names(mydata)
+```
+
+```{r}
+#Subset data into more manageable set
+newdata<-mydata[,c("EMTSUPRT", "MSCODE", "LSATISFY", "@_AGE_G", "SXORIENT")]
+names(newdata)
+```
+
+```{r}
+#Data management 
+
+#LSATISFY 
+class(newdata$LSATISFY)
+table(newdata$LSATISFY)
+
+#Create binary variable and make don't know/refused missing values
+newdata$LSATISFY_binary[newdata$LSATISFY==1|newdata$LSATISFY==2]<-1
+newdata$LSATISFY_binary[newdata$LSATISFY==3|newdata$LSATISFY==4]<-0
+newdata$LSATISFY_binary[newdata$LSATISFY==7|newdata$LSATISFY==9]<-NA
+
+newdata$LSATISFY_binary<-as.factor(newdata$LSATISFY_binary)
+
+levels(newdata$LSATISFY_binary) <- c("Dissatisfied", "Satisfied") 
+
+class(newdata$LSATISFY_binary)
+table(newdata$LSATISFY_binary)
+
+#EMTSUPRT
+class(newdata$EMTSUPRT)
+table(newdata$EMTSUPRT)
+
+#Code don't know and refused as missing
+newdata$EMTSUPRT[newdata$EMTSUPRT==7|newdata$EMTSUPRT==9]<- NA
+
+newdata$EMTSUPRT <- factor(newdata$EMTSUPRT,
+levels = c(1,2,3,4,5),
+labels= c("Always", "Usually", "Sometimes", "Rarely", "Never"))
+
+class(newdata$EMTSUPRT)
+table(newdata$EMTSUPRT)
+
+#MSCODE
+class(newdata$MSCODE)
+table(newdata$MSCODE)
+
+#Combine in center of city of MSA and outside center but inside county containing the center as 'urban'
+newdata$MSCODE[newdata$MSCODE==1|newdata$MSCODE==2]<-1
+newdata$MSCODE[newdata$MSCODE==3]<-2
+newdata$MSCODE[newdata$MSCODE==5]<-3
+
+newdata$MSCODE <- factor(newdata$MSCODE,
+levels = c(1,2,3),
+labels= c("Urban", "Suburb", "Rural"))
+
+table(newdata$MSCODE)
+
+#SXORIENT
+class(newdata$SXORIENT)
+table(newdata$SXORIENT)
+
+#Code lesbian/gay, bisexual, other and don't know/not sure as LGBTQ+ and refused as missing
+newdata$SXORIENT[newdata$SXORIENT==2|newdata$SXORIENT==3|newdata$SXORIENT==4|newdata$SXORIENT==7]<-2
+newdata$SXORIENT[newdata$SXORIENT==7|newdata$SXORIENT==9]<-NA
+
+newdata$SXORIENT <- factor(newdata$SXORIENT,
+levels = c(1, 2),
+labels= c("Heterosexual", "LGBTQ+"))
+
+table(newdata$SXORIENT)
+
+#AGE
+newdata$AGE<-factor(newdata$'@_AGE_G',
+levels = c(1, 2, 3, 4, 5, 6),
+labels= c("18-24 yrs", "25-34 yrs", "35-44 yrs", "45-54 yrs", "55-64 yrs", "65 yrs or older"))
+
+table(newdata$AGE)
+```
+
+```{r}
+
+#Plot LSATISFY
+
+counts<-table(newdata$LSATISFY_binary)
+barplot(counts, col="blue")
+
+t2<-table(newdata$LSATISFY_binary)
+y<-sum(t2)
+y
+```
+```{r}
+
+#Calculate the percentage of individuals in each category
+
+#EMTSUPRT
+xt<-table(newdata$EMTSUPRT, newdata$LSATISFY_binary)
+xt
+prop.table(xt, 1)
+
+#SXORIENT
+xt<-table(newdata$SXORIENT, newdata$LSATISFY_binary)
+xt
+prop.table(xt, 1)
+
+#AGE
+xt<-table(newdata$AGE, newdata$LSATISFY_binary)
+xt
+prop.table(xt, 1)
+
+#MSCODE
+xt<-table(newdata$MSCODE, newdata$LSATISFY_binary)
+xt
+prop.table(xt, 1)
+```
+
+```{r}
+
+#Run a univariate logistic regression model for variable of interest (age, emotional support, sexual orientation, and residential status and calculate ORs and 95% CIs).
+  
+#AGE
+mylogit1<-glm(LSATISFY_binary ~ AGE, data=newdata, family="binomial") 
+summary(mylogit1)
+ORage<-exp(cbind(OR = coef(mylogit1), confint(mylogit1)))
+ORage
+
+#EMTSUPRT
+mylogit2<-glm(LSATISFY_binary ~ EMTSUPRT, data=newdata, family="binomial") 
+summary(mylogit2)
+ORemtsuprt<-exp(cbind(OR = coef(mylogit2), confint(mylogit2)))
+ORemtsuprt
+
+#SXORIENT
+mylogit3<-glm(LSATISFY_binary ~ SXORIENT, data=newdata, family="binomial") 
+summary(mylogit3)
+ORsxorient<-exp(cbind(OR = coef(mylogit3), confint(mylogit3)))
+ORsxorient
+
+#MSCODE
+mylogit4<-glm(LSATISFY_binary ~ MSCODE, data=newdata, family="binomial") 
+summary(mylogit4)
+ORmscode<-exp(cbind(OR = coef(mylogit4), confint(mylogit4)))
+ORmscode
+```
+
+
+```{r}
+
+#Multivariate model with LSATISFY as the dependent variable and age, emotional support, sexual orientation and residential status as the independent variables.
+
+mylogit5<-glm(LSATISFY_binary ~ as.factor(EMTSUPRT) + as.factor(SXORIENT) + as.factor(AGE) + as.factor(MSCODE), data=newdata, family="binomial") 
+summary(mylogit5)
+ORmodel<-exp(cbind(OR=coef(mylogit5), confint(mylogit5)))
+ORmodel
+
+```
+
+
+```{r}
+
+#Check influential values
+
+#Cook's distance
+plot(mylogit5, which=4, id.n=5, col="red", cex.id=0.60) 
+
+#Identify observations with a Cook's D greater than 0.0015 
+y<-as.data.frame(cooks.distance(mylogit5))
+colnames(y)[1]<-"CD"
+y$obs_no<-rownames(y)
+z<-y[which(y$CD>0.0015),]
+z$obs_no
+
+#Classification
+xt<-table(round(predict(mylogit5, type="response")), mylogit5$model$LSATISFY_binary)
+  xt
+  xt2<- xt/sum(xt)
+  xt2
+  p<-sum(diag(xt2))
+  p
+```
+
+
+```{r}
+
+#Exclude influentian values and compare betas
+
+library(car)
+  
+mylogit.modex<-update(mylogit5,subset=c(-174897, -175328, -175733, -228011, -378873))#dropping influential values
+  compareCoefs(mylogit5, mylogit.modex)
+  
+  mylogit.modex
+summary(mylogit.modex)
+ORmodel<-exp(cbind(OR=coef(mylogit.modex), confint(mylogit.modex)))
+ORmodel
+```
+
